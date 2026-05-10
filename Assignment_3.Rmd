@@ -24,8 +24,6 @@ library(shinyWidgets)
 library(vip)
 library(yardstick)
 
-options(tidymodels.progress = FALSE)
-
 # ============================================================
 # DATA LOADING + CLEANING
 # ============================================================
