@@ -417,8 +417,6 @@ circles <- function(df) {
       sizemode = "diameter",
       size     = ~pack_r * 5,
       alpha    = 0.7),
-    layout(xaxis = list(showgrid = FALSE),
-           yaxis = list(showgrid = FALSE)),
     text = ~paste0(
       "<b>", Name_short, "</b><br>",
       "Mechanic: ", Mechanic, "<br>",
