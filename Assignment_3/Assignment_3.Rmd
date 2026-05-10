@@ -438,8 +438,8 @@ Sidebar {.sidebar}
 
 <br>
 
-`r h3("Looking to your own game? /n Or just looking for your new favorite?")`
-`r h3()`
+`r h3("Looking to create your own board game?")`
+`r h3("Or just looking for your new favorite?")`
 
 <br>
 
