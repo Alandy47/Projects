@@ -25,7 +25,8 @@ library(DT)
 library(bslib)
 library(shinyWidgets)
 library(vip)
-library(yardstick) 
+library(yardstick)
+library(rsconnect)
 
 # ============================================================
 # DATA LOADING + CLEANING
