@@ -1,0 +1,713 @@
+---
+title: "Assignment_3"
+author: "Alexis Landy"
+date: "2026-05-10"
+output: html_document
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+library(readxl)
+library(dplyr)
+library(tidymodels)
+library(tidyverse)
+library(packcircles)
+library(plotly)
+library(viridisLite)
+library(fontawesome)
+library(shiny)
+library(shinyjs)
+library(DT)
+library(bslib)
+library(shinyWidgets)
+library(vip)
+library(yardstick) 
+
+# ============================================================
+# DATA LOADING + CLEANING
+# ============================================================
+
+games <- read_excel("Data-Games/board_games_clean.xlsx")
+
+games_new <- games
+games_new[games_new == "NA"] <- NA
+
+games_new$Themes <- toupper(games_new$Theme)
+games_new$Mechanic <- toupper(games_new$Category)
+games_new$Publishers <- as.factor(games_new$Publisher)
+
+games_analysis <- games_new %>%
+  select(1:5, 8, 9, 11:15) %>%
+  relocate(Publishers, .after = Years) %>%
+  relocate(Themes, .after = Playing_time) %>%
+  relocate(Mechanic, .after = Themes) %>%
+  rename(
+    Play_time = Playing_time,
+    Year_published = Years,
+    Total_ratings = Number_of_ratings
+  )
+
+games_mini <- games_analysis %>% 
+  slice(1:1000)
+
+# ============================================================
+# DATA SPLITTING
+# ============================================================
+
+set.seed(123)
+games_splits <- games_analysis %>%
+  slice(1:1000) %>%
+  select(-NAME) %>%
+  initial_split(prop = 0.6, strata = Average_rating)
+
+# ============================================================
+# MECHANIC DICTIONARY
+# ============================================================
+
+mechanic_dictionary <- tibble::tribble(
+  ~Mechanic, ~Definition, ~Examples,
+  "Dice Rolling",
+  "A mechanic where players roll dice to generate random outcomes that influence actions, resources, or combat.",
+  "Yahtzee (crowd), King of Tokyo (expert)",
+  
+  "Roll / Spin and Move",
+  "A mechanic where players roll dice or spin a wheel to determine how far they move along a track or board.",
+  "Monopoly (crowd), Talisman (expert)",
+  
+  "Chit‑Pull System",
+  "A mechanic where random tokens are drawn from a pool to determine events, actions, or combat resolution.",
+  "War Chest (crowd), Combat Commander (expert)",
+  
+  "Press Your Luck",
+  "A mechanic where players repeatedly take risky actions for increasing rewards, stopping before they bust.",
+  "Can't Stop (crowd), Quacks of Quedlinburg (expert)",
+  
+  "Rock‑Paper‑Scissors",
+  "A simultaneous choice mechanic where players select actions that resolve through a cyclical dominance relationship.",
+  "Kingdomino Duel (crowd), Inis (expert)",
+  
+  "Hand Management",
+  "A mechanic where players optimize the timing and combination of cards or tokens in their hand to maximize value.",
+  "Uno (crowd), Race for the Galaxy (expert)",
+  
+  "Set Collection",
+  "A mechanic where players gather groups of related items to score points or unlock abilities.",
+  "Rummy (crowd), Sushi Go! (expert)",
+  
+  "Card Drafting",
+  "A mechanic where players choose cards from a shared pool, often passing the remaining cards to others.",
+  "7 Wonders (crowd), Blood Rage (expert)",
+  
+  "Deck / Pool Building",
+  "A mechanic where players improve a personal deck or pool of actions by acquiring new, stronger cards.",
+  "Dominion (crowd), Aeon’s End (expert)",
+  
+  "Action Queue",
+  "A mechanic where players pre‑arrange actions in a sequence that resolves later, often with limited ability to change it.",
+  "RoboRally (crowd), Mechs vs. Minions (expert)",
+  
+  "Action Points",
+  "A mechanic where players spend a limited pool of points each turn to perform actions of varying costs.",
+  "Pandemic (crowd), Tikal (expert)",
+  
+  "Variable Phase Order",
+  "A mechanic where the sequence of game phases changes from round to round based on player choices or effects.",
+  "Small World (crowd), Puerto Rico (expert)",
+  
+  "Variable Player Powers",
+  "A mechanic where each player has unique abilities or advantages that shape their strategy and playstyle.",
+  "King of Tokyo (crowd), Root (expert)",
+  
+  "Commodity Speculation",
+  "A mechanic where players buy, sell, or hold goods whose values fluctuate over time.",
+  "Pit (crowd), Container (expert)",
+  
+  "Stock Holding",
+  "A mechanic where players acquire shares in companies or factions to earn dividends or influence outcomes.",
+  "Acquire (crowd), Imperial 2030 (expert)",
+  
+  "Grid Movement",
+  "A mechanic where players move pieces across a board divided into discrete squares or spaces.",
+  "Chess (crowd), Gloomhaven (expert)",
+  
+  "Area Movement",
+  "A mechanic where players move between large, connected regions rather than fixed grid spaces.",
+  "Risk (crowd), Twilight Imperium (expert)",
+  
+  "Point‑to‑Point Movement",
+  "A mechanic where movement occurs along predefined paths connecting specific nodes on a map.",
+  "Ticket to Ride (crowd), War of the Ring (expert)",
+  
+  "Hex‑and‑Counter",
+  "A wargame mechanic where units move and fight on a hex‑based map for precise tactical positioning.",
+  "BattleLore (crowd), Advanced Squad Leader (expert)",
+  
+  "Hexagon Grid",
+  "A mechanic where movement and adjacency are defined by hexagonal spaces.",
+  "Catan (crowd), Mage Knight (expert)",
+  
+  "Modular Board",
+  "A mechanic where the board is built from separate tiles or sections that change layout each game.",
+  "Carcassonne (crowd), Eclipse (expert)",
+  
+  "Tile Placement",
+  "A mechanic where players place tiles to build patterns, score points, or shape the board.",
+  "Carcassonne (crowd), Azul (expert)",
+  
+  "Pattern Building",
+  "A mechanic where players create specific arrangements of pieces or symbols to score points.",
+  "Qwirkle (crowd), Sagrada (expert)",
+  
+  "Pattern Recognition",
+  "A mechanic where players identify or react to visual patterns quickly or accurately.",
+  "Spot It! (crowd), The Mind (expert)",
+  
+  "Line Drawing",
+  "A mechanic where players draw lines or routes to claim areas, connect points, or fulfill objectives.",
+  "Dots and Boxes (crowd), Cartographers (expert)",
+  
+  "Area Control / Majority",
+  "A mechanic where players compete to dominate regions by having the most presence or influence.",
+  "Risk (crowd), El Grande (expert)",
+  
+  "Area Enclosure",
+  "A mechanic where players create closed boundaries on the board to claim territory.",
+  "Go (crowd), Qin (expert)",
+  
+  "Area‑Impulse",
+  "A mechanic where players activate areas one at a time to move or attack within those zones.",
+  "Nexus Ops (crowd), Storm Over Arnhem (expert)",
+  
+  "Route / Network Building",
+  "A mechanic where players construct connected paths or networks to link locations or deliver goods.",
+  "Ticket to Ride (crowd), Power Grid (expert)",
+  
+  "Action / Movement Programming",
+  "A mechanic where players secretly plan actions in advance, revealing them later in a fixed sequence.",
+  "RoboRally (crowd), Colt Express (expert)",
+  
+  "Simultaneous Action Selection",
+  "A mechanic where all players choose actions at the same time and reveal them together.",
+  "Wits & Wagers (crowd), 7 Wonders Duel (expert)",
+  
+  "Trick‑Taking",
+  "A mechanic where players play cards into a trick, with one card winning based on suit or rank rules.",
+  "Hearts (crowd), The Crew (expert)",
+  
+  "Memory",
+  "A mechanic where players rely on remembering hidden information or past actions.",
+  "Memory Match (crowd), Mysterium (expert)",
+  
+  "Storytelling",
+  "A mechanic where players create or interpret narratives to guide play or communicate clues.",
+  "Dixit (crowd), Once Upon a Time (expert)",
+  
+  "Acting",
+  "A mechanic where players perform gestures or movements to convey information or complete tasks.",
+  "Charades (crowd), Time’s Up! (expert)",
+  
+  "Cooperative Play",
+  "A mechanic where players work together toward a shared objective, winning or losing as a team.",
+  "Pandemic (crowd), Spirit Island (expert)",
+  
+  "Partnerships",
+  "A mechanic where players form fixed or temporary teams to coordinate strategies.",
+  "Spades (crowd), The Crew: Mission Deep Sea (expert)",
+  
+  "Team‑Based Game",
+  "A mechanic where players are divided into opposing teams that coordinate internally while competing externally.",
+  "Codenames (crowd), Captain Sonar (expert)",
+  
+  "Negotiation",
+  "A mechanic where players bargain or persuade others to gain advantages or influence outcomes.",
+  "Monopoly (crowd), Chinatown (expert)",
+  
+  "Alliances",
+  "A mechanic where players form agreements to cooperate temporarily for mutual benefit.",
+  "Risk (crowd), Diplomacy (expert)",
+  
+  "Bribery",
+  "A mechanic where players offer incentives or resources to influence others’ decisions.",
+  "Sheriff of Nottingham (crowd), Republic of Rome (expert)",
+  
+  "Voting",
+  "A mechanic where players cast votes to decide outcomes or trigger events.",
+  "The Resistance (crowd), Dead of Winter (expert)",
+  
+  "Take That",
+  "A mechanic where players directly hinder opponents through attacks or disruptive actions.",
+  "Exploding Kittens (crowd), Munchkin (expert)",
+  
+  "Secret Unit Deployment",
+  "A mechanic where players place units or choose actions secretly, revealing them later.",
+  "Stratego (crowd), Cry Havoc (expert)",
+  
+  "Player Elimination",
+  "A mechanic where players can be removed from the game before it ends.",
+  "Clue (crowd), Bang! (expert)",
+  
+  "Pick‑Up and Deliver",
+  "A mechanic where players transport goods or characters between locations to fulfill objectives.",
+  "Ticket to Ride: First Journey (crowd), Merchants & Marauders (expert)",
+  
+  "Trading",
+  "A mechanic where players exchange resources or favors to improve their position.",
+  "Catan (crowd), Bohnanza (expert)",
+  
+  "Simulation",
+  "A mechanic where the game models real‑world systems or scenarios with interconnected variables.",
+  "SimCity Board Game (crowd), Food Chain Magnate (expert)",
+  
+  "Time Track",
+  "A mechanic where turn order is determined by how much time players spend on actions.",
+  "Patchwork (crowd), The Red Cathedral (expert)",
+  
+  "Real‑Time",
+  "A mechanic where players act simultaneously under time pressure instead of taking turns.",
+  "5‑Minute Dungeon (crowd), Space Alert (expert)",
+  
+  "Role Playing",
+  "A mechanic where players assume characters with defined traits and make decisions based on narrative identity.",
+  "Dungeons & Dragons (crowd), Gloomhaven: Jaws of the Lion (expert)",
+  
+  "Campaign / Battle Card Driven",
+  "A mechanic where scenarios or battles progress through card‑driven events or story developments.",
+  "Risk Legacy (crowd), Twilight Struggle (expert)",
+  
+  "Wargames",
+  "A mechanic category where players simulate military conflict using units, terrain, and tactical decisions.",
+  "Axis & Allies (crowd), Advanced Squad Leader (expert)",
+  
+  "Solo / Solitaire Game",
+  "A mechanic where the game is designed for a single player using automated opponents or puzzles.",
+  "Friday (crowd), Mage Knight Solo (expert)",
+  
+  "Children’s Games",
+  "A mechanic category where rules and components are simplified for younger players.",
+  "Candy Land (crowd), Outfoxed! (expert)",
+  
+  "Singing",
+  "A mechanic where players must sing or vocalize as part of performing actions or giving clues.",
+  "Happy Salmon (crowd), Spontuneous (expert)")
+
+# ============================================================
+# TOP 10 MECHANICS PREP
+# ============================================================
+
+mechanic_counts <- games_analysis %>%
+  separate_rows(Mechanic, sep = ";") %>%
+  mutate(Mechanic = str_trim(Mechanic)) %>%
+  count(Mechanic, sort = TRUE)
+
+# ============================================================
+# MODELING PIPELINE
+# ============================================================
+
+games_recipe <-
+  recipe(Average_rating ~ ., data = training(games_splits)) %>%
+  step_naomit() %>% 
+  step_unknown(all_nominal_predictors()) %>% 
+  step_impute_mean(all_numeric_predictors()) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_predictors())
+
+games_glmnet <- 
+  linear_reg(penalty = tune(), mixture = 1) %>%   # mixture = 1 = lasso
+  set_engine("glmnet")
+
+glmnet_wflow <- 
+  workflow() %>%
+  add_model(games_glmnet) %>%
+  add_recipe(games_recipe)
+
+set.seed(123)
+games_folds <- vfold_cv(training(games_splits), v = 5)
+
+glmnet_grid <- tibble(
+  penalty = 10^seq(-4, -1, length.out = 20)
+)
+
+# ============================================================
+# CIRCLE PACKING
+# ============================================================
+
+clusters <- split(games_analysis, games_analysis$Mechanic)
+
+sampled_clusters <- lapply(clusters, function(df) {
+  if (nrow(df) <= 15) df else df %>% slice_sample(n = 15)
+})
+
+truncate_chars <- function(x, limit = 15) {
+  sapply(x, function(name) {
+    if (nchar(name) <= limit) return(name)
+    truncated <- substr(name, 1, limit)
+    truncated <- sub("\\s+\\S*$", "", truncated)
+    paste0(truncated, "...")
+  })
+}
+
+games_sampled <- bind_rows(sampled_clusters)
+
+radius <- log1p(games_sampled$Play_time)
+
+games_sampled_final <- games_sampled %>% 
+  mutate(Mechanic = as.character(Mechanic),
+         Radius   = radius)
+
+games_sampled_split <- split(games_sampled_final, games_sampled_final$Mechanic)
+
+split_clusters <- lapply(games_sampled_split, function(df){
+  mech <- df$Radius
+  packing_split <- circleLayout(mech)$layout %>%
+    rename(pack_x = x, pack_y = y, pack_r = radius)
+  cbind(df, packing_split)
+})
+
+games_packed_all <- bind_rows(split_clusters)
+
+scale_factor <- 300
+
+games_packed_all <- games_packed_all %>%
+  group_by(Mechanic) %>%
+  mutate(pack_x = pack_x * scale_factor,
+         pack_y = pack_y * scale_factor) %>%
+  mutate(pack_x = pack_x - mean(pack_x),
+         pack_y = pack_y - mean(pack_y)) %>%
+  ungroup()
+
+clusters_per_row <- ceiling(60 / 13)
+
+Mech_index <- games_packed_all %>%
+  distinct(Mechanic) %>%
+  arrange(Mechanic) %>%
+  mutate(Index = row_number(),
+         Row   = (Index - 1) %/% clusters_per_row,
+         Col   = (Index - 1) %% clusters_per_row)
+
+games_packed_final <- games_packed_all %>%
+  left_join(Mech_index, by = "Mechanic") %>%
+  mutate(Name_short  = truncate_chars(NAME, 15),
+         x_shifted   = pack_x + Col * 35000,
+         y_shifted   = pack_y - Row * 20000,
+         Themes_clean = as.character(Themes))
+
+mech_list <- sort(unique(games_packed_final$Mechanic))
+
+facet1_mechs <- mech_list[1:33]
+facet2_mechs <- mech_list[34:65]
+
+facet1_data <- games_packed_final %>% filter(Mechanic %in% facet1_mechs)
+facet2_data <- games_packed_final %>% filter(Mechanic %in% facet2_mechs)
+
+theme_colors <- viridisLite::turbo(length(unique(games_packed_final$Themes_clean)))
+
+circles <- function(df) {
+  plot_ly(
+    data = df,
+    type = "scatter",
+    mode = "markers",
+    x = ~x_shifted,
+    y = ~y_shifted,
+    color = ~Themes_clean,
+    colors = theme_colors,
+    marker = list(
+      sizemode = "diameter",
+      size     = ~pack_r * 5,
+      alpha    = 0.7
+    ),
+    text = ~paste0(
+      "<b>", Name_short, "</b><br>",
+      "Mechanic: ", Mechanic, "<br>",
+      "Playtime (min): ", Play_time, "<br>",
+      "Publisher: ", Publishers
+    ),
+    hoverinfo = "text"
+  )
+}
+
+```
+
+
+---
+
+Sidebar {.sidebar}
+===========================================================
+
+<br>
+
+`r h3("Objective:")`
+`r h3("Predict which hotel stays include children.")`
+
+<br>
+
+- - -
+
+<br
+
+```{r}
+useShinyjs()
+
+selectInput("select_mechanic", "Mechanics:", choices = sort(unique(games_analysis$Mechanic)), multiple = TRUE)
+
+sliderInput("slide_player", "Minimum Player Number", min = 2, max = 9, value = 2)
+
+sliderInput("slide_time", "Playtime (Min)", min = 5, max = 60000, value = 30)
+
+selectInput("select_theme", "Themes:", choices = sort(unique(games_analysis$Themes)), multiple = TRUE)
+
+actionButton("apply", "Apply", icon = icon("circle-play"))
+actionButton("reset", "Reset", icon = icon("arrow-rotate-left"))
+
+```
+
+```{r}
+observeEvent(input$reset, {
+  updateSelectInput(session, "select_mechanic", selected = character(0))
+  updateSelectInput(session, "select_theme",   selected = character(0))
+  updateSliderInput(session, "slide_player",   value = 2)
+  updateSliderInput(session, "slide_time",     value = 30)
+
+  shinyjs::delay(300, {
+    shinyjs::click("apply")
+  })
+})
+
+games_filtered <- eventReactive(input$apply, {
+  df <- games_analysis
+
+  if (length(input$select_mechanic) > 0)
+    df <- df %>% filter(Mechanic %in% input$select_mechanic)
+
+  if (length(input$select_theme) > 0)
+    df <- df %>% filter(Themes %in% input$select_theme)
+
+  df %>%
+    filter(
+      Min_players <= input$slide_player,
+      Play_time   <= input$slide_time
+    )
+}, ignoreNULL = FALSE)
+
+```
+
+
+Game Comparison
+===========================================================
+
+### Game Comparison
+
+```{r, include=FALSE}
+glmnet_tuned <- tune_grid(
+  glmnet_wflow,
+  resamples = games_folds,
+  grid = glmnet_grid,
+  metrics = metric_set(rmse)
+)
+
+best_glmnet <- select_best(glmnet_tuned, metric = "rmse")
+
+final_glmnet_fit <- 
+  finalize_workflow(glmnet_wflow, best_glmnet) %>%
+  fit(training(games_splits))
+
+final_glmnet_fit %>% 
+  predict(training(games_splits))
+
+final_glmnet_fit %>%
+  predict(testing(games_splits)) %>%
+  bind_cols(testing(games_splits)) %>%
+  metrics(truth = Average_rating, estimate = .pred)
+
+```
+
+
+## Mechanics A–M
+```{r}
+output$plot_1 <- renderPlotly({
+  circles(facet1_data)
+})
+
+plotlyOutput("plot_1")
+```
+
+## Mechanics N–Z
+```{r}
+output$plot_2 <- renderPlotly({
+  circles(facet2_data)
+})
+
+plotlyOutput("plot_2")
+
+```
+
+
+---
+
+Find a Game
+===========================================================
+### Games Table
+
+## boon
+```{r}
+output$games_table_final <- renderDT({
+  datatable(games_filtered())
+})
+
+DTOutput("games_table_final")
+
+```
+
+## Rating Box
+```{r}
+output$rating_box <- renderText({
+  avg_rating <- mean(games_filtered()$Average_rating, na.rm = TRUE)
+  ifelse(is.na(avg_rating), "NA", paste0(round(avg_rating, 1), "/10"))
+})
+
+```
+
+```{css}
+.kpi-card {
+  background-color: #6a0dad;
+  color: white;
+  padding: 25px;
+  border-radius: 12px;
+  font-size: 32px;
+  font-weight: bold;
+  text-align: center;
+  margin-top: 10px;
+  margin-bottom: 20px;
+}
+```
+
+<div class="kpi-card">
+  ```{r}
+  textOutput("rating_box")
+  ```
+</div>
+
+### Top Mechanics
+```{r}
+games_analysis %>%
+  separate_rows(Mechanic, sep = ";") %>%
+  mutate(Mechanic = str_trim(Mechanic)) %>%
+  count(Mechanic, sort = TRUE) %>%
+  slice_head(n = 10) %>%
+  ggplot(aes(x = reorder(Mechanic, n), y = n)) +
+  geom_col() +
+  coord_flip()
+```
+
+---
+
+Model Performance
+===========================================================
+### Data Splitting
+
+**Total Observations:**  
+`r dim(games_analysis)%>% scales::comma()`
+
+**Training Set:**  
+`r dim(training(games_splits)) %>% scales::comma()`
+
+**Validation Set:**  
+`r (dim(training(games_splits))* 0.6) %>% scales::comma()`
+
+**Testing Set:**  
+`r dim(testing(games_splits))%>% scales::comma()`
+
+
+## Model Accuracy (linear regression)
+```{r}
+final_glmnet_fit %>% 
+  augment(new_data = testing(games_splits)) %>% 
+  ggplot(aes(x = .pred, y = Average_rating)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0)
+
+```
+
+## Prediction Errors
+```{r}
+final_glmnet_fit %>%
+  predict(new_data = testing(games_splits)) %>%
+  bind_cols(testing(games_splits)) %>%
+  metrics(truth = Average_rating, estimate = .pred) %>% 
+  ggplot(aes(x = .metric, y = .estimate, fill = .metric)) +
+  geom_col(width = 0.6, alpha = 0.8) +
+  scale_fill_manual(values = c("rmse" = "#4B9CD3",
+                               "mae"  = "#7EC8E3",
+                               "rsq"  = "#1B4965")) +
+  labs(
+    title = "Model Prediction Error Metrics",
+    x = "Metric",
+    y = "Value"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
+
+```
+
+
+## Prediction Metrics
+```{r}
+final_glmnet_fit %>%
+  predict(testing(games_splits)) %>%
+  bind_cols(testing(games_splits)) %>%
+  metrics(truth = Average_rating, estimate = .pred)
+
+```
+
+## VIP Plot
+```{r}
+final_glmnet_fit %>% 
+  extract_fit_parsnip() %>%
+  vip::vip() +
+  geom_col(aes(fill = Variable))
+```
+
+
+---
+
+Data Overview
+===========================================================
+### Games Table
+
+```{r}
+output$games_table_final <- renderDT({
+  datatable(
+    games_analysis %>% slice(1:1000),
+    filter = "top",
+    options = list(
+      pageLength = 100,
+      scrollY = "400px",
+      scrollX = TRUE
+    )
+  )
+})
+```
+
+```{r}
+DTOutput("games_table_final")
+```
+
+## Dictionary
+```{r}
+output$mechanic_table <- renderDT({
+  mechanic_dictionary %>%
+    arrange(Mechanic) %>%
+    datatable(
+      options = list(
+        searching = TRUE,
+        pageLength = 50,
+        lengthMenu = c(50, 100),
+        scrollY = "250px",
+        scrollX = "300px"
+      ),
+      style = "default"
+    )
+})
+
+DTOutput("mechanic_table")
+```
