@@ -3,10 +3,8 @@ title: "Assignment_3"
 author: "Alexis Landy"
 output: 
   flexdashboard::flex_dashboard:
-    orientation: columns
+    orientation: Rows
     vertical_layout: fill
-    logo: img_hotel/grand-budapest.png
-    theme: lumen
     source_code: embed
 runtime: shiny
 ---
@@ -32,7 +30,7 @@ library(yardstick)
 # DATA LOADING + CLEANING
 # ============================================================
 
-games <- read_excel("Data-Games/board_games_clean.xlsx")
+games <- read_excel("C:/Projects/Data-Games/board_games_clean.xlsx")
 
 games_new <- games
 games_new[games_new == "NA"] <- NA
