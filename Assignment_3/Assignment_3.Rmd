@@ -5,6 +5,7 @@ output:
   flexdashboard::flex_dashboard:
     orientation: rows
     vertical_layout: fill
+    theme: "journal"
     source_code: embed
 runtime: shiny
 ---
@@ -470,22 +471,33 @@ observeEvent(input$reset, {
   })
 })
 
-games_filtered <- eventReactive(input$apply, {
-  df <- games_analysis %>% 
-    slice(1:1000)
+games_filtered <- eventReactive(
+  eventExpr = input$apply,
+  valueExpr = {
 
-  if (!is.null(input$select_mechanic) && length(input$select_mechanic) > 0)
-    df <- df %>% filter(Mechanic %in% input$select_mechanic)
+    df <- games_analysis %>% slice(1:1000)
 
-  if (!is.null(input$select_theme) && length(input$select_theme) > 0)
-    df <- df %>% filter(Themes %in% input$select_theme)
+    # Mechanic filter
+    if (length(input$select_mechanic) > 0) {
+      df <- df %>% filter(Mechanic %in% input$select_mechanic)
+    }
 
-  df %>%
-    filter(
+    # Theme filter
+    if (length(input$select_theme) > 0) {
+      df <- df %>% filter(Themes %in% input$select_theme)
+    }
+
+    # Numeric filters
+    df <- df %>% filter(
       Min_players <= input$slide_player,
       Play_time   <= input$slide_time
     )
-}, ignoreNULL = FALSE)
+
+    df
+  },
+  ignoreNULL = FALSE
+)
+
 
 ```
 
@@ -545,12 +557,11 @@ plotlyOutput("plot_2")
 
 Find a Game
 ===========================================================
+### games
 
-### Reactive
-
+## Next Favorite
 ```{r}
 output$games_table_final <- renderDT({
-  
   datatable(games_filtered())
 })
 
@@ -580,7 +591,7 @@ output$rating_box <- renderText({
   font-weight: bold;
   text-align: center;
   margin-top: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 ```
 
@@ -590,7 +601,7 @@ output$rating_box <- renderText({
   ```
 </div>
 
-### Top Mechanics
+### Top 10 Mechanics
 ```{r}
 games_analysis %>%
   separate_rows(Mechanic, sep = ";") %>%
@@ -608,47 +619,29 @@ Model Performance
 ===========================================================
 ### Data Splitting
 
-**Total Observations:**  
-`r dim(games_analysis)%>% scales::comma()`
+Row
+-----
+<div style="display:flex; gap:30px;">
 
-**Training Set:**  
-`r dim(training(games_splits)) %>% scales::comma()`
+<div><b>Total Observations:</b><br>`r dim(games_analysis)[1] %>% scales::comma()`</div>
 
-**Validation Set:**  
-`r (dim(training(games_splits))* 0.6) %>% scales::comma()`
+<div><b>Training Set:</b><br>`r dim(training(games_splits))[1] %>% scales::comma()`</div>
 
-**Testing Set:**  
-`r dim(testing(games_splits))%>% scales::comma()`
+<div><b>Validation Set:</b><br>`r (dim(training(games_splits))[1] * 0.6) %>% scales::comma()`</div>
 
+<div><b>Testing Set:</b><br>`r dim(testing(games_splits))[1] %>% scales::comma()`</div>
 
-## Model Accuracy (linear regression)
+</div>
+
+Row
+-----
+## Model Accuracy
 ```{r}
 final_glmnet_fit %>% 
   augment(new_data = testing(games_splits)) %>% 
   ggplot(aes(x = .pred, y = Average_rating)) +
   geom_point() +
   geom_abline(slope = 1, intercept = 0)
-
-```
-
-## Prediction Errors
-```{r}
-final_glmnet_fit %>%
-  predict(new_data = testing(games_splits)) %>%
-  bind_cols(testing(games_splits)) %>%
-  metrics(truth = Average_rating, estimate = .pred) %>% 
-  ggplot(aes(x = .metric, y = .estimate, fill = .metric)) +
-  geom_col(width = 0.6, alpha = 0.8) +
-  scale_fill_manual(values = c("rmse" = "#4B9CD3",
-                               "mae"  = "#7EC8E3",
-                               "rsq"  = "#1B4965")) +
-  labs(
-    title = "Model Prediction Error Metrics",
-    x = "Metric",
-    y = "Value"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(legend.position = "none")
 
 ```
 
@@ -662,6 +655,10 @@ final_glmnet_fit %>%
 
 ```
 
+
+Row
+-----
+
 ## VIP Plot
 ```{r}
 final_glmnet_fit %>% 
@@ -670,12 +667,25 @@ final_glmnet_fit %>%
   geom_col(aes(fill = Variable))
 ```
 
+## Prediction Errors
+```{r}
+final_glmnet_fit %>%
+  predict(new_data = testing(games_splits)) %>%
+  bind_cols(testing(games_splits)) %>%
+  mutate(residual = Average_rating - .pred) %>% 
+  ggplot(aes(x = residual)) +
+  geom_histogram(bins = 30,
+                 fill = "#4B9CD3",
+                 color = "white",
+                 alpha = 0.8)
+
+```
 
 ---
 
 Data Overview
 ===========================================================
-### Games Table
+### Data Table
 
 ```{r}
 output$games_table_final <- renderDT({
@@ -695,7 +705,7 @@ output$games_table_final <- renderDT({
 DTOutput("games_table_final")
 ```
 
-## Dictionary
+## Mechanics Dictionary
 ```{r}
 output$mechanic_table <- renderDT({
   mechanic_dictionary %>%
