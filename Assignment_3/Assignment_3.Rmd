@@ -44,11 +44,9 @@ games_analysis <- games_new %>%
   relocate(Publishers, .after = Years) %>%
   relocate(Themes, .after = Playing_time) %>%
   relocate(Mechanic, .after = Themes) %>%
-  rename(
-    Play_time = Playing_time,
-    Year_published = Years,
-    Total_ratings = Number_of_ratings
-  )
+  rename(Play_time = Playing_time,
+         Year_published = Years,
+         Total_ratings = Number_of_ratings)
 
 games_mini <- games_analysis %>% 
   slice(1:1000)
@@ -316,7 +314,7 @@ games_recipe <-
   step_normalize(all_predictors())
 
 games_glmnet <- 
-  linear_reg(penalty = tune(), mixture = 1) %>%   # mixture = 1 = lasso
+  linear_reg(penalty = tune(), mixture = 1) %>%
   set_engine("glmnet")
 
 glmnet_wflow <- 
@@ -327,9 +325,7 @@ glmnet_wflow <-
 set.seed(123)
 games_folds <- vfold_cv(training(games_splits), v = 5)
 
-glmnet_grid <- tibble(
-  penalty = 10^seq(-4, -1, length.out = 20)
-)
+glmnet_grid <- tibble(penalty = 10^seq(-4, -1, length.out = 20))
 
 # ============================================================
 # CIRCLE PACKING
@@ -417,14 +413,12 @@ circles <- function(df) {
     marker = list(
       sizemode = "diameter",
       size     = ~pack_r * 5,
-      alpha    = 0.7
-    ),
+      alpha    = 0.7),
     text = ~paste0(
       "<b>", Name_short, "</b><br>",
       "Mechanic: ", Mechanic, "<br>",
       "Playtime (min): ", Play_time, "<br>",
-      "Publisher: ", Publishers
-    ),
+      "Publisher: ", Publishers),
     hoverinfo = "text"
   )
 }
@@ -439,8 +433,8 @@ Sidebar {.sidebar}
 
 <br>
 
-`r h3("Objective:")`
-`r h3("Predict which hotel stays include children.")`
+`r h3()`
+`r h3()`
 
 <br>
 
@@ -477,12 +471,13 @@ observeEvent(input$reset, {
 })
 
 games_filtered <- eventReactive(input$apply, {
-  df <- games_analysis
+  df <- games_analysis %>% 
+    slice(1:1000)
 
-  if (length(input$select_mechanic) > 0)
+  if (!is.null(input$select_mechanic) && length(input$select_mechanic) > 0)
     df <- df %>% filter(Mechanic %in% input$select_mechanic)
 
-  if (length(input$select_theme) > 0)
+  if (!is.null(input$select_theme) && length(input$select_theme) > 0)
     df <- df %>% filter(Themes %in% input$select_theme)
 
   df %>%
@@ -532,6 +527,7 @@ output$plot_1 <- renderPlotly({
 })
 
 plotlyOutput("plot_1")
+
 ```
 
 ## Mechanics N–Z
@@ -549,14 +545,18 @@ plotlyOutput("plot_2")
 
 Find a Game
 ===========================================================
-### Games Table
 
-## boon
+### Reactive
+
 ```{r}
 output$games_table_final <- renderDT({
+  
   datatable(games_filtered())
 })
 
+```
+
+```{r}
 DTOutput("games_table_final")
 
 ```
@@ -714,3 +714,4 @@ output$mechanic_table <- renderDT({
 
 DTOutput("mechanic_table")
 ```
+
