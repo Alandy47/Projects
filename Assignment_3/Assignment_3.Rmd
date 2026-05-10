@@ -1,8 +1,13 @@
 ---
 title: "Assignment_3"
 author: "Alexis Landy"
-date: "2026-05-10"
-output: html_document
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    logo: img_hotel/grand-budapest.png
+    theme: lumen
+    source_code: embed
 runtime: shiny
 ---
 
