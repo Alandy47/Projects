@@ -27,12 +27,13 @@ library(shinyWidgets)
 library(vip)
 library(yardstick)
 library(rsconnect)
+library(BiocManager)
 
 # ============================================================
 # DATA LOADING + CLEANING
 # ============================================================
 
-games <- read_excel("C:/Projects/Data-Games/board_games_clean.xlsx")
+games <- read_excel("Data-Games/board_games_clean.xlsx")
 
 games_new <- games
 games_new[games_new == "NA"] <- NA
@@ -389,8 +390,8 @@ Mech_index <- games_packed_all %>%
 games_packed_final <- games_packed_all %>%
   left_join(Mech_index, by = "Mechanic") %>%
   mutate(Name_short  = truncate_chars(NAME, 15),
-         x_shifted   = pack_x + Col * 35000,
-         y_shifted   = pack_y - Row * 20000,
+         x_shifted   = pack_x + Col * 50000,
+         y_shifted   = pack_y - Row * 30000,
          Themes_clean = as.character(Themes))
 
 mech_list <- sort(unique(games_packed_final$Mechanic))
@@ -562,14 +563,32 @@ Find a Game
 
 ## Next Favorite
 ```{r}
-output$games_table_final <- renderDT({
-  datatable(games_filtered())
+output$games_table_r <- renderDT({
+
+  df <- games_analysis %>% 
+    slice(1:1000)
+
+  if (length(input$select_mechanic) > 0) {
+    df <- df %>% filter(Mechanic %in% input$select_mechanic)
+  }
+
+  if (length(input$select_theme) > 0) {
+    df <- df %>% filter(Themes %in% input$select_theme)
+  }
+
+  df <- df %>% filter(
+    Min_players <= input$slide_player,
+    Play_time   <= input$slide_time
+  )
+
+  datatable(df)
 })
+
 
 ```
 
 ```{r}
-DTOutput("games_table_final")
+DTOutput("games_table_r")
 
 ```
 
@@ -583,26 +602,25 @@ output$rating_box <- renderText({
 ```
 
 ```{css}
-.kpi-card {
-  background-color: #6a0dad;
+.kpi-card2 {
+  background-color: #ffd700;
   color: white;
-  padding: 25px;
+  padding: 10px;
   border-radius: 12px;
   font-size: 32px;
   font-weight: bold;
   text-align: center;
   margin-top: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 5px;
 }
 ```
 
-<div class="kpi-card">
+<div class="kpi-card2">
   ```{r}
   textOutput("rating_box")
   ```
 </div>
 
-### Top 10 Mechanics
 ```{r}
 games_analysis %>%
   separate_rows(Mechanic, sep = ";") %>%
@@ -620,17 +638,39 @@ Model Performance
 ===========================================================
 ### Data Splitting
 
+```{css}
+.kpi-card {
+  background-color: #fa8072;
+  color: white;
+  padding: 5px;
+  border-radius: 7px;
+  font-size: 20px;
+  font-weight: bold;
+  text-align: center;
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+```
+
 Row
 -----
 <div style="display:flex; gap:30px;">
 
+<div class="kpi-card">
 <div><b>Total Observations:</b><br>`r dim(games_analysis)[1] %>% scales::comma()`</div>
+</div>
 
+<div class="kpi-card">
 <div><b>Training Set:</b><br>`r dim(training(games_splits))[1] %>% scales::comma()`</div>
+</div>
 
+<div class="kpi-card">
 <div><b>Validation Set:</b><br>`r (dim(training(games_splits))[1] * 0.6) %>% scales::comma()`</div>
+</div>
 
+<div class="kpi-card">
 <div><b>Testing Set:</b><br>`r dim(testing(games_splits))[1] %>% scales::comma()`</div>
+</div>
 
 </div>
 
@@ -688,6 +728,9 @@ Data Overview
 ===========================================================
 ### Data Table
 
+Row
+-----
+
 ```{r}
 output$games_table_final <- renderDT({
   datatable(
@@ -706,6 +749,11 @@ output$games_table_final <- renderDT({
 DTOutput("games_table_final")
 ```
 
+Row
+-----
+
+Column
+-----
 ## Mechanics Dictionary
 ```{r}
 output$mechanic_table <- renderDT({
@@ -724,5 +772,10 @@ output$mechanic_table <- renderDT({
 })
 
 DTOutput("mechanic_table")
+```
+
+## Workflow
+```{r}
+final_glmnet_fit
 ```
 
