@@ -5,7 +5,7 @@ account: alandy
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 17332067
-bundleId:
+bundleId: 11975376
 url: https://alandy.shinyapps.io/Assignment_3/
 version: 1
 asMultiple: FALSE

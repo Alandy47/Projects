@@ -1,10 +1,10 @@
 ---
-title: "Assignment_3"
-author: "Alexis Landy"
+title: "Board Game Finder"
 output: 
   flexdashboard::flex_dashboard:
     orientation: rows
     vertical_layout: fill
+    logo: image/bgames.png
     theme: "journal"
     source_code: embed
 runtime: shiny
@@ -27,7 +27,7 @@ library(shinyWidgets)
 library(vip)
 library(yardstick)
 library(rsconnect)
-library(BiocManager)
+library(BiocVersion)
 
 # ============================================================
 # DATA LOADING + CLEANING
@@ -417,6 +417,8 @@ circles <- function(df) {
       sizemode = "diameter",
       size     = ~pack_r * 5,
       alpha    = 0.7),
+    layout(xaxis = list(showgrid = FALSE),
+           yaxis = list(showgrid = FALSE)),
     text = ~paste0(
       "<b>", Name_short, "</b><br>",
       "Mechanic: ", Mechanic, "<br>",
@@ -436,7 +438,7 @@ Sidebar {.sidebar}
 
 <br>
 
-`r h3()`
+`r h3("Looking to your own game? /n Or just looking for your new favorite?")`
 `r h3()`
 
 <br>
@@ -629,6 +631,7 @@ games_analysis %>%
   slice_head(n = 10) %>%
   ggplot(aes(x = reorder(Mechanic, n), y = n)) +
   geom_col() +
+  scale_colour_brewer(palette = "Set3") +
   coord_flip()
 ```
 
@@ -705,7 +708,8 @@ Row
 final_glmnet_fit %>% 
   extract_fit_parsnip() %>%
   vip::vip() +
-  geom_col(aes(fill = Variable))
+  geom_col(aes(fill = Variable)) +
+  scale_fill_brewer(palette = "Set3")
 ```
 
 ## Prediction Errors
@@ -716,7 +720,7 @@ final_glmnet_fit %>%
   mutate(residual = Average_rating - .pred) %>% 
   ggplot(aes(x = residual)) +
   geom_histogram(bins = 30,
-                 fill = "#4B9CD3",
+                 fill = "lightblue",
                  color = "white",
                  alpha = 0.8)
 
@@ -774,6 +778,8 @@ output$mechanic_table <- renderDT({
 DTOutput("mechanic_table")
 ```
 
+Column
+-----
 ## Workflow
 ```{r}
 final_glmnet_fit
