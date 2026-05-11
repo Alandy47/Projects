@@ -3,7 +3,7 @@ title: "Board Game Finder"
 output: 
   flexdashboard::flex_dashboard:
     orientation: rows
-    vertical_layout: fill
+    vertical_layout: scroll
     logo: image/bgames.png
     theme: "journal"
     source_code: embed
@@ -390,8 +390,8 @@ Mech_index <- games_packed_all %>%
 games_packed_final <- games_packed_all %>%
   left_join(Mech_index, by = "Mechanic") %>%
   mutate(Name_short  = truncate_chars(NAME, 15),
-         x_shifted   = pack_x + Col * 50000,
-         y_shifted   = pack_y - Row * 30000,
+         x_shifted   = pack_x + Col * 30000,
+         y_shifted   = pack_y - Row * 22000,
          Themes_clean = as.character(Themes))
 
 mech_list <- sort(unique(games_packed_final$Mechanic))
@@ -443,16 +443,15 @@ Sidebar {.sidebar}
 
 - - -
 
-<br
 
 ```{r}
 useShinyjs()
 
 selectInput("select_mechanic", "Mechanics:", choices = sort(unique(games_analysis$Mechanic)), multiple = TRUE)
 
-sliderInput("slide_player", "Minimum Player Number", min = 2, max = 9, value = 2)
+sliderInput("slide_player", "Minimum Player Number", min = 0, max = 9, value = 2)
 
-sliderInput("slide_time", "Playtime (Min)", min = 5, max = 60000, value = 30)
+numericInput("num_time", "Playtime (Min)", min = 0, max = 60000, value = "")
 
 selectInput("select_theme", "Themes:", choices = sort(unique(games_analysis$Themes)), multiple = TRUE)
 
@@ -466,39 +465,121 @@ observeEvent(input$reset, {
   updateSelectInput(session, "select_mechanic", selected = character(0))
   updateSelectInput(session, "select_theme",   selected = character(0))
   updateSliderInput(session, "slide_player",   value = 2)
-  updateSliderInput(session, "slide_time",     value = 30)
+  updateNumericInput(session, "num_time",     value = "")
 
   shinyjs::delay(300, {
     shinyjs::click("apply")
   })
 })
 
-games_filtered <- eventReactive(
-  eventExpr = input$apply,
-  valueExpr = {
+games_filtered <- reactive({
 
-    df <- games_analysis %>% slice(1:1000)
+  df <- games_analysis %>% slice(1:1000)
 
-    # Mechanic filter
-    if (length(input$select_mechanic) > 0) {
-      df <- df %>% filter(Mechanic %in% input$select_mechanic)
-    }
+  if (is.null(input$apply) || input$apply == 0) {
+    return(df)
+  }
 
-    # Theme filter
-    if (length(input$select_theme) > 0) {
-      df <- df %>% filter(Themes %in% input$select_theme)
-    }
+  mech   <- length(input$select_mechanic) > 0
+  theme  <- length(input$select_theme) > 0
+  player <- !is.null(input$slide_player)
+  time   <- !is.null(input$slide_time)
 
-    # Numeric filters
-    df <- df %>% filter(
-      Min_players <= input$slide_player,
-      Play_time   <= input$slide_time
-    )
+  if (!mech && !theme && !player && !time) {
+    return(df)
+  }
 
-    df
-  },
-  ignoreNULL = FALSE
-)
+  if (mech && !theme && !player && !time) {
+    return(df[df$Mechanic %in% input$select_mechanic, ])
+  }
+
+  if (!mech && theme && !player && !time) {
+    return(df[df$Themes %in% input$select_theme, ])
+  }
+
+  if (!mech && !theme && player && !time) {
+    return(df[df$Min_players <= input$slide_player, ])
+  }
+
+  if (!mech && !theme && !player && time) {
+    return(df[df$Play_time <= input$slide_time, ])
+  }
+
+  if (mech && theme && !player && !time) {
+    return(df[
+      df$Mechanic %in% input$select_mechanic &
+      df$Themes   %in% input$select_theme, ])
+  }
+
+  if (mech && !theme && player && !time) {
+    return(df[
+      df$Mechanic    %in% input$select_mechanic &
+      df$Min_players <= input$slide_player, ])
+  }
+
+  if (mech && !theme && !player && time) {
+    return(df[
+      df$Mechanic  %in% input$select_mechanic &
+      df$Play_time <= input$slide_time, ])
+  }
+
+  if (!mech && theme && player && !time) {
+    return(df[
+      df$Themes      %in% input$select_theme &
+      df$Min_players <= input$slide_player, ])
+  }
+
+  if (!mech && theme && !player && time) {
+    return(df[
+      df$Themes    %in% input$select_theme &
+      df$Play_time <= input$slide_time, ])
+  }
+
+  if (!mech && !theme && player && time) {
+    return(df[
+      df$Min_players <= input$slide_player &
+      df$Play_time   <= input$slide_time, ])
+  }
+
+  if (mech && theme && player && !time) {
+    return(df[
+      df$Mechanic    %in% input$select_mechanic &
+      df$Themes      %in% input$select_theme &
+      df$Min_players <= input$slide_player, ])
+  }
+
+  if (mech && theme && !player && time) {
+    return(df[
+      df$Mechanic  %in% input$select_mechanic &
+      df$Themes    %in% input$select_theme &
+      df$Play_time <= input$slide_time, ])
+  }
+
+  if (mech && !theme && player && time) {
+    return(df[
+      df$Mechanic    %in% input$select_mechanic &
+      df$Min_players <= input$slide_player &
+      df$Play_time   <= input$slide_time, ])
+  }
+
+  if (!mech && theme && player && time) {
+    return(df[
+      df$Themes      %in% input$select_theme &
+      df$Min_players <= input$slide_player &
+      df$Play_time   <= input$slide_time, ])
+  }
+
+  if (mech && theme && player && time) {
+    return(df[
+      df$Mechanic    %in% input$select_mechanic &
+      df$Themes      %in% input$select_theme &
+      df$Min_players <= input$slide_player &
+      df$Play_time   <= input$slide_time, ])
+  }
+
+  return(df)
+})
+
 
 
 ```
@@ -554,36 +635,22 @@ plotlyOutput("plot_2")
 
 ```
 
-
 ---
 
-Find a Game
+Find Your Game
 ===========================================================
-### games
+###
 
-## Next Favorite
-```{r}
+Row {data-height=400}
+------
+### Next Favorite
+
+```{r include=FALSE}
 output$games_table_r <- renderDT({
-
-  df <- games_analysis %>% 
-    slice(1:1000)
-
-  if (length(input$select_mechanic) > 0) {
-    df <- df %>% filter(Mechanic %in% input$select_mechanic)
-  }
-
-  if (length(input$select_theme) > 0) {
-    df <- df %>% filter(Themes %in% input$select_theme)
-  }
-
-  df <- df %>% filter(
-    Min_players <= input$slide_player,
-    Play_time   <= input$slide_time
-  )
-
-  datatable(df)
+  
+  datatable(games_filtered())
+  
 })
-
 
 ```
 
@@ -592,10 +659,21 @@ DTOutput("games_table_r")
 
 ```
 
+Row {data-height=15}
+-----
+
 ## Rating Box
-```{r}
+
+```{r include=FALSE}
 output$rating_box <- renderText({
+
+  # First load → show blank
+  if (is.null(input$apply) || input$apply == 0) {
+    return("")
+  }
+
   avg_rating <- mean(games_filtered()$Average_rating, na.rm = TRUE)
+
   ifelse(is.na(avg_rating), "NA", paste0(round(avg_rating, 1), "/10"))
 })
 
@@ -605,57 +683,75 @@ output$rating_box <- renderText({
 .kpi-card2 {
   background-color: #ffd700;
   color: white;
-  padding: 10px;
-  border-radius: 12px;
-  font-size: 32px;
+  width: 200px;
+  height: 200px;
+  padding: 20px;
+  border-radius: 6px;
+  font-size: 28px;
   font-weight: bold;
   text-align: center;
-  margin-top: 10px;
-  margin-bottom: 5px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  margin: 5px auto;;
 }
 ```
 
 <div class="kpi-card2">
   ```{r}
   textOutput("rating_box")
+  
   ```
 </div>
 
-```{r}
+###
+
+```{r, fig.width= 10}
 games_analysis %>%
   separate_rows(Mechanic, sep = ";") %>%
   mutate(Mechanic = str_trim(Mechanic)) %>%
   count(Mechanic, sort = TRUE) %>%
   slice_head(n = 10) %>%
   ggplot(aes(x = reorder(Mechanic, n), y = n)) +
-  geom_col() +
-  scale_colour_brewer(palette = "Set3") +
-  coord_flip()
+  geom_col(aes(fill = Mechanic)) +
+  scale_fill_brewer(palette = "Set3") +
+  coord_flip() +
+  labs(y = "Count",
+       x = "Mechanic") +
+  theme_minimal()
 ```
 
 ---
 
 Model Performance
 ===========================================================
-### Data Splitting
 
 ```{css}
 .kpi-card {
   background-color: #fa8072;
   color: white;
+  width: 300px;
+  height: 150px;
   padding: 5px;
-  border-radius: 7px;
-  font-size: 20px;
+  border-radius: 6px;
+  font-size: 28px;
   font-weight: bold;
   text-align: center;
-  margin-top: 5px;
-  margin-bottom: 5px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  margin: 5px auto;;
 }
 ```
 
-Row
+Row {data-height=200}
 -----
-<div style="display:flex; gap:30px;">
+
+### Data Splitting
+
+<div style="display:flex; gap:30px;justify-content:center;">
 
 <div class="kpi-card">
 <div><b>Total Observations:</b><br>`r dim(games_analysis)[1] %>% scales::comma()`</div>
@@ -675,42 +771,27 @@ Row
 
 </div>
 
-Row
+
+Row {data-height=400}
 -----
-## Model Accuracy
+
+### Model Accuracy
+
 ```{r}
 final_glmnet_fit %>% 
   augment(new_data = testing(games_splits)) %>% 
   ggplot(aes(x = .pred, y = Average_rating)) +
   geom_point() +
-  geom_abline(slope = 1, intercept = 0)
+  geom_abline(slope = 1, intercept = 0) +
+  labs(y = "Average Rating",
+       x = "Predicted Rating") +
+  theme_minimal()
 
 ```
 
 
-## Prediction Metrics
-```{r}
-final_glmnet_fit %>%
-  predict(testing(games_splits)) %>%
-  bind_cols(testing(games_splits)) %>%
-  metrics(truth = Average_rating, estimate = .pred)
+### Prediction Errors
 
-```
-
-
-Row
------
-
-## VIP Plot
-```{r}
-final_glmnet_fit %>% 
-  extract_fit_parsnip() %>%
-  vip::vip() +
-  geom_col(aes(fill = Variable)) +
-  scale_fill_brewer(palette = "Set3")
-```
-
-## Prediction Errors
 ```{r}
 final_glmnet_fit %>%
   predict(new_data = testing(games_splits)) %>%
@@ -720,7 +801,36 @@ final_glmnet_fit %>%
   geom_histogram(bins = 30,
                  fill = "lightblue",
                  color = "white",
-                 alpha = 0.8)
+                 alpha = 0.8) +
+  labs(x = "Model Errors",
+       y = "Count") +
+  theme_minimal()
+
+```
+
+Row {data-height=350}
+-----
+
+### VIP Plot
+
+```{r fig.width=10}
+final_glmnet_fit %>% 
+  extract_fit_parsnip() %>%
+  vip::vip() +
+  geom_col(aes(fill = Variable)) +
+  scale_fill_brewer(palette = "Set3") +
+  theme_minimal()
+
+```
+
+
+### Prediction Metrics
+
+```{r}
+final_glmnet_fit %>%
+  predict(testing(games_splits)) %>%
+  bind_cols(testing(games_splits)) %>%
+  metrics(truth = Average_rating, estimate = .pred)
 
 ```
 
@@ -728,10 +838,11 @@ final_glmnet_fit %>%
 
 Data Overview
 ===========================================================
-### Data Table
 
-Row
+Row {data-height=400}
 -----
+
+### Data Table
 
 ```{r}
 output$games_table_final <- renderDT({
@@ -741,8 +852,7 @@ output$games_table_final <- renderDT({
     options = list(
       pageLength = 100,
       scrollY = "400px",
-      scrollX = TRUE
-    )
+      scrollX = TRUE)
   )
 })
 ```
@@ -751,34 +861,29 @@ output$games_table_final <- renderDT({
 DTOutput("games_table_final")
 ```
 
-Row
+Row {data-height=500}
 -----
 
-Column
------
-## Mechanics Dictionary
-```{r}
+### Mechanics Dictionary
+
+```{r fig.width=15}
 output$mechanic_table <- renderDT({
   mechanic_dictionary %>%
     arrange(Mechanic) %>%
-    datatable(
-      options = list(
-        searching = TRUE,
-        pageLength = 50,
-        lengthMenu = c(50, 100),
-        scrollY = "250px",
-        scrollX = "300px"
-      ),
-      style = "default"
-    )
+    datatable(width = 5,
+              height = 10,
+              options = list(searching = TRUE,
+                             pageLength = 100,
+                             scrollY = TRUE,
+                             scrollX = TRUE))
 })
 
 DTOutput("mechanic_table")
 ```
 
-Column
------
-## Workflow
+
+### Workflow
+
 ```{r}
 final_glmnet_fit
 ```
